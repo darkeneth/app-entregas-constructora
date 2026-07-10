@@ -579,8 +579,40 @@
       };
       
       const currentFilteredObservations = currentAptObsSorted.filter(o => {
-        // ... (código de filtros) ...
-        return true;
+        // Reglas estrictas para contratistas
+        if (role === 'contratista') { 
+           if (currentUser?.assignedPartidas?.length) { 
+             if (!currentUser.assignedPartidas.includes(o.partida)) return false; 
+           } else if (o.subcontractor !== currentUser?.subcontractor) {
+             return false; 
+           }
+        } 
+        else if (filterSubcontractor !== 'Todos' && o.subcontractor !== filterSubcontractor) {
+           return false;
+        }
+
+        // 1. Filtro de Estado (Ignorando mayúsculas/minúsculas y espacios)
+        if (filterStatus && filterStatus !== 'Todos') {
+           const obsStatus = String(o.status || '').toLowerCase().trim();
+           const searchStatus = String(filterStatus).toLowerCase().trim();
+           if (obsStatus !== searchStatus) return false;
+        }
+        
+        // 2. Filtro de Ambiente (Ignorando espacios fantasmas)
+        if (filterAmbiente && filterAmbiente !== 'Todos') {
+           const obsAmb = String(o.ambiente || 'General').trim();
+           const searchAmb = String(filterAmbiente).trim();
+           if (obsAmb !== searchAmb) return false;
+        } 
+        
+        // 3. Filtro de Especialidad / Partida (Ignorando espacios fantasmas)
+        if (filterPartida && filterPartida !== 'Todos') {
+           const obsPart = String(o.partida || '').trim();
+           const searchPart = String(filterPartida).trim();
+           if (obsPart !== searchPart) return false;
+        }
+
+        return true; // Si pasa todas las pruebas, se muestra
       });
 
       // --- 🔗 MOTOR DE SINCRONIZACIÓN CON SHEETS ---
@@ -750,7 +782,23 @@ const handleLoginSubmit = async (e) => {
       }, []);
 
       const updateConfig = async (collection, data, setter) => { setter(data); if(isCloud()) try { await window.firebase.firestore().collection('config').doc(collection).set({value: data}); } catch(e){} };
-
+// --- 🔗 ENVIAR HISTORIAL AL EXCEL ---
+      const forceSyncHistoryToSheets = async () => {
+        if (!GOOGLE_SHEETS_WEBHOOK) { showToast('No hay conexión con Excel.', 'error'); return; }
+        if (safeObservations.length === 0) { showToast('No hay observaciones para enviar.', 'error'); return; }
+        
+        triggerConfirm(`¿Enviar las ${safeObservations.length} observaciones históricas al Excel? Esto puede tardar unos minutos. No cierre la página.`, async () => {
+          showToast(`Iniciando envío de ${safeObservations.length} registros al Excel... ⏳`);
+          for (let i = 0; i < safeObservations.length; i++) {
+             const obs = safeObservations[i];
+             syncToSheets(obs, 'update', `#${getObsDisplayNumber(obs.id)}`);
+             // Pausa mágica de 300ms entre cada envío para no asustar a Google
+             await new Promise(resolve => setTimeout(resolve, 300)); 
+          }
+          showToast('✅ Sincronización histórica al Excel completada.');
+        });
+      };
+      // -------------------------------------
       const forceSyncToCloud = async () => {
         if(!isCloud()) return; showToast('Subiendo todos los datos a la nube...'); const db = window.firebase.firestore();
         try {
@@ -3112,18 +3160,35 @@ const handleCrearUsuario = async (e) => {
                       <div className="text-4xl opacity-50">☁️</div>
                     </div>
 
-                    <div className="mt-2 p-6 bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-2xl shadow-sm">
-                      <div className="flex gap-4 items-center mb-3">
-                        <span className="text-3xl drop-shadow-md">🔄</span>
-                        <div>
-                          <h4 className="font-bold text-base text-emerald-900">Sincronización Total (Forzar Migración de Entorno)</h4>
-                          <p className="text-xs text-emerald-700 mt-0.5 max-w-2xl">Si ha estado trabajando de forma local o sin conexión y sus datos no aparecen en los demás dispositivos del equipo, presione este botón para inyectar toda la estructura a la base de datos principal.</p>
+<div className="grid grid-cols-1 gap-4 mt-2">
+                      <div className="p-6 bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-2xl shadow-sm">
+                        <div className="flex gap-4 items-center mb-3">
+                          <span className="text-3xl drop-shadow-md">☁️</span>
+                          <div>
+                            <h4 className="font-bold text-base text-emerald-900">Sincronización a la Nube (Firebase)</h4>
+                            <p className="text-xs text-emerald-700 mt-0.5 max-w-2xl">Sube toda la configuración local actual a la base de datos de internet.</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <button className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" onClick={forceSyncToCloud} disabled={!isCloudSyncing}>
+                            Subir datos locales a la Nube ⬆️
+                          </button>
                         </div>
                       </div>
-                      <div className="flex justify-end">
-                        <button className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" onClick={forceSyncToCloud} disabled={!isCloudSyncing}>
-                          Subir mis datos locales a la Nube Segura ⬆️
-                        </button>
+
+                      <div className="p-6 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl shadow-sm">
+                        <div className="flex gap-4 items-center mb-3">
+                          <span className="text-3xl drop-shadow-md">📊</span>
+                          <div>
+                            <h4 className="font-bold text-base text-indigo-900">Exportar Historial a Excel (Google Sheets)</h4>
+                            <p className="text-xs text-indigo-700 mt-0.5 max-w-2xl">¿Conectaste tu Excel recientemente? Presiona este botón para enviar todas las observaciones antiguas a tu Google Sheets. El sistema las inyectará una por una automáticamente.</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-xl text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-95" onClick={forceSyncHistoryToSheets}>
+                            Sincronizar Historial con Excel 🚀
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3792,3 +3857,4 @@ const handleCrearUsuario = async (e) => {
   </script>
 </body>
 </html>
+
