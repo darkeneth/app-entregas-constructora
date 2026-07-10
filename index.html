@@ -1650,16 +1650,35 @@ const handleCrearUsuario = async (e) => {
       const handleDeleteObservation = (obsId) => {
         if (role === 'contratista') { showToast('Los contratistas no tienen permisos para eliminar observaciones.', 'error'); return; }
         triggerConfirm('¿Está seguro de eliminar permanentemente esta observación? Esta acción no se puede deshacer.', () => {
+          
+          // 1. Identificamos qué observación estamos borrando para saber su departamento
+          const obsToDelete = safeObservations.find(o => o.id === obsId);
+          
+          // 2. La borramos de la App y de Firebase
           setObservations(function(prev) { return prev.filter(function(obs) { return obs.id !== obsId; }); });
-          if (isCloud()) {
-            window.firebase.firestore().collection('observaciones').doc(obsId).delete().catch(err => console.error(err));
+          if (isCloud()) { window.firebase.firestore().collection('observaciones').doc(obsId).delete().catch(err => console.error(err)); }
+          
+          // 3. La borramos del Excel
+          if (typeof syncToSheets === 'function') {
+            syncToSheets({ id: obsId }, 'delete');
+            
+            // 4. MAGIA: Re-calculamos los números de las observaciones que sobrevivieron en ese dpto
+            if (obsToDelete) {
+               // Filtramos solo las de ese dpto, ignorando la que acabamos de borrar
+               const remainingObs = safeObservations
+                  .filter(o => o.id !== obsId && o.projectId === obsToDelete.projectId && o.floor === obsToDelete.floor && o.apartment === obsToDelete.apartment)
+                  .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                  
+               // Le avisamos al Excel los nuevos números secuenciales, uno por uno en milisegundos
+               remainingObs.forEach((o, index) => {
+                  const newVisualId = '#' + String(index + 1).padStart(3, '0');
+                  syncToSheets(o, 'update', newVisualId);
+               });
+            }
           }
-          
-          // 🚨 LÍNEA MÁGICA PARA BORRAR EN SHEETS
-          syncToSheets({ id: obsId }, 'delete');
-          
-          setSelectedObs(null);
-          showToast('Observación eliminada.');
+
+          setSelectedObs(null); 
+          showToast('Observación eliminada y Excel re-numerado.');
         });
       };
 
