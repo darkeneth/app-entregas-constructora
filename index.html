@@ -131,7 +131,7 @@
 
     // --- 🛡️ INICIO DE PARCHE DE SEGURIDAD ---
     // MODO SANDBOX: Cambiar a 'false' cuando estés listo para subir a producción (Firebase)
-    const SANDBOX_MODE = true; 
+    const SANDBOX_MODE = false; 
 
     // Motor de Encriptación Irreversible (SHA-256)
     const hashPassword = async (plainText) => {
@@ -426,7 +426,31 @@
       }, [projects, cloudMedia]);
 
       const safeUsers = useMemo(() => { let arr = Array.isArray(users) ? users.filter(Boolean) : []; if (!arr.some(u => u.isRoot)) { const fA = arr.find(u => String(u.role).toLowerCase() === 'admin'); if (fA) fA.isRoot = true; else arr.push({ username: 'admin', password: '123', name: 'Administrador Maestro', role: 'admin', isRoot: true }); } return arr; }, [users]);
-      
+       // --- 🛡️ INICIO DE DEFENSA ANTI-SPOOFING ---
+      // Vigila si el usuario intentó hackear sus permisos en el LocalStorage
+      useEffect(() => {
+        if (isAuthenticated && currentUser && safeUsers.length > 0) {
+          const realUser = safeUsers.find(u => u.username === currentUser.username);
+          
+          if (!realUser) {
+            // El administrador borró a este usuario de la base de datos. Lo expulsamos.
+            handleLogout();
+            showToast('Su cuenta ha sido desactivada por el administrador.', 'error');
+          } else if (realUser.role !== role || realUser.isRoot !== currentUser.isRoot) {
+            // El usuario intentó cambiar su rol usando F12, o el Admin se lo acaba de cambiar
+            setCurrentUser(realUser);
+            setRole(realUser.role);
+            try { localStorage.setItem('ce_sess', JSON.stringify(realUser)); } catch(e){}
+            
+            // Si estaba husmeando en ajustes, lo pateamos a la pantalla principal
+            if (realUser.role === 'contratista' && view === 'ajustes') {
+               setView('projects');
+            }
+            showToast('Permisos sincronizados con el servidor maestro.', 'error');
+          }
+        }
+      }, [safeUsers, isAuthenticated, currentUser, role, view]);
+      // --- 🛡️ FIN DE DEFENSA ---    
       const activeProject = safeProjects.find(p => p.id === selectedProjectId) || null;
       const safeFloors = activeProject?.floors?.filter(Boolean) || [];
       const safeApts = activeProject?.apartments?.filter(Boolean) || [];
