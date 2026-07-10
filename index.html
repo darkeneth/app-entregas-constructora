@@ -538,10 +538,11 @@
         return true;
       });
 
-            // --- 🔗 MOTOR DE SINCRONIZACIÓN CON SHEETS ---
+      // --- 🔗 MOTOR DE SINCRONIZACIÓN CON SHEETS ---
       const syncToSheets = (obsData, action = 'update', forcedVisualId = null) => {
         if (!GOOGLE_SHEETS_WEBHOOK) return;
         const payload = {
+          secretToken: "CONSTRUCTORA_ALPHA_2026_SECRETO_!#", // 🚨 LA LLAVE MAESTRA
           id: obsData.id,
           action: action, // Le decimos al excel qué hacer (borrar o actualizar)
           visualId: forcedVisualId || `#${getObsDisplayNumber(obsData.id)}`,
