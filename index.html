@@ -52,8 +52,7 @@
       };
       const link = document.createElement('link');
       link.rel = 'manifest';
-      link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
-      document.head.appendChild(link);
+      link.href = "./manifest.json"
     })();
   </script>
 
