@@ -52,7 +52,8 @@
       };
       const link = document.createElement('link');
       link.rel = 'manifest';
-      link.href = "./manifest.json"
+      link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
+      document.head.appendChild(link);
     })();
   </script>
 
@@ -68,7 +69,7 @@
     }
   </script>
 
-  <script type="module" crossorigin src="/app-entregas-constructora/assets/index-DZqCGan5.js"></script>
+  <script type="module" crossorigin src="/app-entregas-constructora/assets/index-JvMPrDQ_.js"></script>
   <link rel="stylesheet" crossorigin href="/app-entregas-constructora/assets/index-CsZatbmU.css">
 </head>
 <body class="text-slate-800 antialiased selection:bg-indigo-200 selection:text-indigo-900">
